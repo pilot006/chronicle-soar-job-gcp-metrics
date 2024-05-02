@@ -55,6 +55,7 @@ def main():
             data = json.loads(response.text)
             for time_series in data.get("timeSeries", []):
                 siemplify.LOGGER.info(json.dumps(time_series, indent=1))
+                send_to_chronicle(time_series)
         else:
             print(f"Error: {response.status_code} - {response.text}")
 
@@ -68,7 +69,7 @@ def main():
 def send_to_chronicle(log_line):
     raw_event = {
         "customer_id": customer_id,
-        "log_type": UDM,
+        "log_type": 'UDM',
         "entries": [
         {
             "log_text": json.dumps(log_line)
