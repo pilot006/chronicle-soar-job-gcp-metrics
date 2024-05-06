@@ -5,7 +5,7 @@ With the [announcement of auto-JSON parsing in Google SecOps](https://cloud.goog
 
 ## Pre-requisities
 - Google Cloud Project - Metrics are retrieved at a project-level.
-- Service Account JSON Key - To retrieve metrics, a service account credential must be created with `monitoring.timeSeries.list` permission.
+- Service Account JSON Key - To retrieve metrics, a service account credential must be created with the `monitoring.timeSeries.list` permission.
 
 ## Installation
 1. Navigate to Releases in this repo and download the .zip package.
