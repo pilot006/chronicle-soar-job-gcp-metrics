@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 import google.auth.transport.requests
 from google.oauth2 import service_account
+import sys
 
 
 INTEGRATION_NAME = "Google Cloud Metrics Loader"
@@ -21,6 +22,8 @@ project = siemplify.extract_job_param(param_name="GCP Project Name", print_value
 metric = siemplify.extract_job_param(param_name="Metric(s)", print_value=True)
 customer_id = siemplify.extract_job_param(param_name="SecOps Tenant ID", print_value=True)
 
+log_batch = []
+
 
 def main():
 
@@ -33,6 +36,10 @@ def main():
         else:
             siemplify.LOGGER.info('Single metric detected in: ' + metric)
             get_metric(metric)
+
+        # If the batch still has lines to send, send them now
+        if len(log_batch) > 0:
+            send_to_chronicle(log_batch)
 
     except Exception as e:
         siemplify.LOGGER.error("General error performing job {}".format(SCRIPT_NAME))
@@ -71,20 +78,33 @@ def get_metric(metric):
     if response.status_code == 200:
         data = json.loads(response.text)
         for time_series in data.get("timeSeries", []):
-            siemplify.LOGGER.info(json.dumps(time_series, indent=1))
-            send_to_chronicle(time_series)
+            #siemplify.LOGGER.info(json.dumps(time_series, indent=1))
+            batch_logs(time_series)
+            #send_to_chronicle(time_series)
     else:
         print(f"Error: {response.status_code} - {response.text}")
 
-def send_to_chronicle(log_line):
+def batch_logs(log_line):
+    batch_size = sys.getsizeof(log_batch)
+    siemplify.LOGGER.info('Batch size: ' + str(batch_size))
+    # Batch size is limited to 1 MB: https://cloud.google.com/chronicle/docs/reference/ingestion-api#unstructuredlogentries
+    if sys.getsizeof(log_batch) < 800000:
+        entry = { "log_text": json.dumps(log_line) }
+        log_batch.append(entry)
+        siemplify.LOGGER.info(json.dumps(log_batch, indent=1))
+    else:
+        entry = { "log_text": json.dumps(log_line) }
+        log_batch.append(entry)
+        siemplify.LOGGER.info("Batch full. Sending to Google SecOps.")
+        siemplify.LOGGER.info(json.dumps(log_batch, indent=1))
+        send_to_chronicle(log_batch)
+        log_batch.clear()
+
+def send_to_chronicle(log_lines):
     raw_event = {
         "customer_id": customer_id,
         "log_type": 'UDM',
-        "entries": [
-        {
-            "log_text": json.dumps(log_line)
-        }
-        ]
+        "entries": log_lines
     }
 
     credentials = service_account.Credentials.from_service_account_info(
