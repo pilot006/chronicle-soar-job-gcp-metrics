@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import json
 import google.auth.transport.requests
 from google.oauth2 import service_account
-import sys
+#import sys
 
 
 INTEGRATION_NAME = "Google Cloud Metrics Loader"
@@ -52,8 +52,13 @@ def get_metric(metric):
     # Current time
     now = datetime.utcnow()
 
+    # We'll pull data from a -5 minute offset
+    offset = now - timedelta(minutes=5)
+    offset = datetime.strftime(offset, "%Y-%m-%dT%H:%M:")
+    print(offset)
+
     # Set the start time to 4 minutes from now. This should provide us the most recent metrics
-    start_time = now - timedelta(minutes=4)
+    start_time = now - timedelta(minutes=10)
 
     # Define the filter for the requested metric
     filter_ = (
@@ -78,6 +83,13 @@ def get_metric(metric):
     if response.status_code == 200:
         data = json.loads(response.text)
         for time_series in data.get("timeSeries", []):
+            p_store = time_series['points']
+            time_series['points'] = []
+            for p in p_store:
+                #print(p)
+                if offset in p['interval']['startTime']:
+                  time_series['points'].append(p)
+                  #print(p)
             #siemplify.LOGGER.info(json.dumps(time_series, indent=1))
             batch_logs(time_series)
             #send_to_chronicle(time_series)
@@ -85,10 +97,10 @@ def get_metric(metric):
         print(f"Error: {response.status_code} - {response.text}")
 
 def batch_logs(log_line):
-    batch_size = sys.getsizeof(log_batch)
+    batch_size = len(json.dumps(log_batch).encode())
     siemplify.LOGGER.info('Batch size: ' + str(batch_size))
     # Batch size is limited to 1 MB: https://cloud.google.com/chronicle/docs/reference/ingestion-api#unstructuredlogentries
-    if sys.getsizeof(log_batch) < 800000:
+    if batch_size < 800000:
         entry = { "log_text": json.dumps(log_line) }
         log_batch.append(entry)
         siemplify.LOGGER.info(json.dumps(log_batch, indent=1))
